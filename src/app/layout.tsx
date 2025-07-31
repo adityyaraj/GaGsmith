@@ -6,7 +6,7 @@ import {ProviderWrapper} from "@/components/provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
-  subsets: ["latin"],
+  subsets: ["latin"], 
 });
 
 const geistMono = Geist_Mono({

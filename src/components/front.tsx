@@ -6,7 +6,7 @@ import { ShimmerButton } from "./magicui/shimmer-button";
 import { TypingAnimation } from "./magicui/typing-animation";
 const Front = () => {
   return (
-    <div className="bg-background h-2/4">
+    <div className="bg-background h-screen h-full">
       <div className="p-5 flex justify-between items-center bg-background/70 backdrop-blur top-0 sticky z-50 border-b border-foreground/50">
         <div className="text-2xl font-bold">
           <h1>Logo</h1>
@@ -50,7 +50,7 @@ const Front = () => {
           </div>
         </div>
         <div>
-          <Link href="/dashboard">
+          <Link href="/generate">
             <ShimmerButton className="mt-4 font-semibold ">
               <span className="whitespace-pre-wrap text-center text-sm font-medium leading-none tracking-tight text-white dark:from-white dark:to-slate-900/10 lg:text-lg">
                 Get Started
