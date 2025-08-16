@@ -2,7 +2,7 @@
 import LoginButton from "@/components/login";
 import { Button } from "@/components/ui/button";
 import { useSession } from "next-auth/react";
-import React, { useState,useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import { Textarea } from "@/components/ui/textarea";
 import FileInput from "@/components/file";
@@ -29,18 +29,27 @@ const Generate = () => {
   const [prompt, setPrompt] = React.useState("");
   const [meme, setMeme] = React.useState("");
   const [memeon, setMemeOn] = React.useState(false);
+  const [done, setDone] = React.useState(false);
   const [image, setImage] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+
+  const pollTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const generate = async () => {
+    if (pollTimeout.current) {
+      clearTimeout(pollTimeout.current);
+      pollTimeout.current = null;
+    }
     setLoading(true);
+    setDone(false);
     setImage(null);
     setJobId(null);
     try {
       const template = meme || "Random";
       const res = await fetch("/api/llm", {
         method: "POST",
-        body: JSON.stringify({  prompt, meme: template }),
+        body: JSON.stringify({ prompt, meme: template }),
         headers: {
           "Content-Type": "application/json",
         },
@@ -64,8 +73,9 @@ const Generate = () => {
         setImage(data.imageUrl);
         return;
       }
-      if (data.downloads?.[0]?.url) {
-        setImage(data.downloads[0].url);
+      const immediate = data.imageUrl ?? data.downloads?.[0]?.url ?? null;
+      if (immediate) {
+        setImage(immediate);
         return;
       }
       if (data.id) {
@@ -82,30 +92,64 @@ const Generate = () => {
     }
   };
   useEffect(() => {
-  if (!jobId) return;
-  let cancelled = false;
+    if (!jobId) return;
+    let cancelled = false;
 
-  const poll = async () => {
-    try {
-      const r = await fetch(`/api/llm/${jobId}`);
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error || "Status fetch failed");
+    const poll = async () => {
+      try {
+        const r = await fetch(`/api/llm/${jobId}`, { cache: "no-store" });
+        const txt = await r.text();
+        const data = txt ? JSON.parse(txt) : {};
+        if (!r.ok) throw new Error(data?.error || "Status fetch failed");
 
-      if (data.imageUrl && !cancelled) {
-        setImage(data.imageUrl);
-      } else if (!cancelled && (!data.status || data.status === "running" || data.status === "queued")) {
-        setTimeout(poll, 2000);
-      } else if (data.status === "failed") {
-        console.error("Generation failed:", data);
+        console.log(
+          "[poll]",
+          jobId,
+          data?.status,
+          data?.downloads?.length ?? 0
+        );
+
+        const url = data.imageUrl ?? data.downloads?.[0]?.url ?? null;
+        if (!cancelled && url) {
+          setImage(url);
+          return;
+        }
+
+        const status = String(data.status ?? "unknown").toLowerCase();
+        const keepPolling = [
+          "running",
+          "queued",
+          "processing",
+          "in_progress",
+          "pending",
+          "starting",
+        ].includes(status);
+
+        if (!cancelled && keepPolling) {
+          pollTimeout.current = setTimeout(poll, 2000);
+        } else if (!cancelled && status === "complete") {
+          // sometimes URL appears right after complete; short retry
+          pollTimeout.current = setTimeout(poll, 1000);
+        } else if (
+          !cancelled &&
+          ["failed", "error", "canceled", "cancelled"].includes(status)
+        ) {
+          console.error("Generation failed:", data);
+          alert("Generation failed. Please try again.");
+        } else {
+          // Unknown status; retry a few times
+          pollTimeout.current = setTimeout(poll, 2000);
+        }
+      } catch (e) {
+        if (!cancelled) pollTimeout.current = setTimeout(poll, 3000);
       }
-    } catch {
-      if (!cancelled) setTimeout(poll, 3000);
-    }
-  };
+    };
 
-  poll();
-  return () => { cancelled = true; };
-}, [jobId]);
+    poll();
+    return () => {
+      cancelled = true;
+    };
+  }, [jobId]);
   if (!session?.user) {
     return (
       <div className="h-full flex justify-center items-center flex-col gap-4">
@@ -116,7 +160,7 @@ const Generate = () => {
       </div>
     );
   }
-  
+
   return (
     <div className="h-full flex flex-col justify-center ">
       <div>
@@ -130,17 +174,29 @@ const Generate = () => {
             Job started: {jobId}. Waiting for image...
           </div>
         )}
-
-        {typeof image === "string" && image.trim() !== "" && (
-          <Image
-            src={image}
-            alt="Generated"
-            width={848}
-            height={848}
-            className="rounded shadow-md"
-          />
+        {image && (
+          <>
+            <a
+              href={image}
+              target="_blank"
+              rel="noreferrer"
+              className="underline"
+            >
+              Open image
+            </a>
+            <Image
+              src={image}
+              alt="Generated"
+              width={848}
+              height={848}
+              className="rounded shadow-md mt-2"
+              unoptimized
+              onLoad={() => setDone(true)}
+            />
+          </>
         )}
       </div>
+      {!done &&
       <div className="pb-50 flex flex-col justify-center items-center gap-2">
         <div>
           <Gauge width={100} height={100} />
@@ -160,34 +216,34 @@ const Generate = () => {
           />
           <div className="flex justify-between items-center p-3">
             <div className=" flex gap-2">
-            <FileInput />
-            <div>
-              {" "}
-              <button
-                className="border border-foreground/50 p-1.5 rounded-md"
-                onClick={() => {
-                  setMemeOn(true);
-                }}
-              >
-               {meme ? meme : "Template"}
-              </button>
-              {memeon && (
-                <ul className="absolute z-10 mt-2 bg-background border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-                  {memes.map((meme, i) => (
-                    <li
-                      key={i}
-                      onClick={() => {
-                        setMeme(meme);
-                        setMemeOn(false);
-                      }}
-                      className="px-4 py-2 hover:bg-gray-900 cursor-pointer"
-                    >
-                      {meme}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
+              <FileInput />
+              <div>
+                {" "}
+                <button
+                  className="border border-foreground/50 p-1.5 rounded-md"
+                  onClick={() => {
+                    setMemeOn(true);
+                  }}
+                >
+                  {meme ? meme : "Template"}
+                </button>
+                {memeon && (
+                  <ul className="absolute z-10 mt-2 bg-background border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                    {memes.map((meme, i) => (
+                      <li
+                        key={i}
+                        onClick={() => {
+                          setMeme(meme);
+                          setMemeOn(false);
+                        }}
+                        className="px-4 py-2 hover:bg-gray-900 cursor-pointer"
+                      >
+                        {meme}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
             <Button
               className="transition-transform hover:scale-105"
@@ -199,6 +255,7 @@ const Generate = () => {
           </div>
         </div>
       </div>
+      }
     </div>
   );
 };

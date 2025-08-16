@@ -1,23 +1,12 @@
 import type { NextConfig } from "next";
+/** @type {import('next').NextConfig} */
 
-const nextConfig: NextConfig = {
+const nextConfig = {
   images: {
-    domains: ["videos.magichour.ai"],
+    domains: ["videos.magichour.ai", "lh3.googleusercontent.com"],
     remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "lh3.googleusercontent.com",
-      },
-      {
-        protocol: "https",
-        hostname: "replicate.delivery",
-      },
-      {
-        protocol: "https", 
-        hostname: "*.replicate.delivery",
-      },
+      { protocol: "https", hostname: "videos.magichour.ai", pathname: "/**" },
     ],
   },
 };
-
-export default nextConfig;
+module.exports = nextConfig

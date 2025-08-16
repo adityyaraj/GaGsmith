@@ -12,9 +12,12 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
     const client = new Client({ token });
     const res = await client.v1.imageProjects.get({ id });
 
-    const status = res?.status ?? "unknown";
-    const downloads = res?.downloads ?? [];
+    const status = String(res?.status ?? "unknown").toLowerCase();
+    const downloads = Array.isArray(res?.downloads) ? res.downloads : [];
     const imageUrl = downloads[0]?.url ?? null;
+
+    // Debug on server (optional)
+    console.log("[imageProjects.get]", id, { status, downloads: downloads.length });
 
     return NextResponse.json({ id, status, imageUrl, downloads, raw: res }, { status: 200 });
   } catch (error) {

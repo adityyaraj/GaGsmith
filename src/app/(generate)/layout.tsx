@@ -2,7 +2,7 @@ import LoginButton from "@/components/login";
 import Navbar from "@/components/navbar";
 import { ProviderWrapper } from "@/components/provider";
 import { auth } from "@/lib/auth";
-import { redirect } from "next/navigation";
+import "./globals.css";
 
 export default function RootLayout({
   children,
